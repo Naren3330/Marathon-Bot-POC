@@ -1,6 +1,7 @@
 import os
 import time
 import shutil
+import asyncio
 import streamlit as st
 from langchain.schema import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -23,6 +24,18 @@ LLAMAPARSE_API_KEY = os.getenv("LLAMA_CLOUD_API_KEY")
 USE_LLAMAPARSE = LLAMAPARSE_API_KEY is not None and LLAMAPARSE_API_KEY.strip() != ""
 
 # -------------------------------
+# FIX: Event Loop Management
+# -------------------------------
+def get_or_create_eventloop():
+    """Get or create event loop for async operations"""
+    try:
+        return asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop
+
+# -------------------------------
 # STEP 1: Load Knowledge Base with LlamaParse
 # -------------------------------
 def load_documents():
@@ -33,6 +46,9 @@ def load_documents():
     parser = None
     if USE_LLAMAPARSE:
         try:
+            # Ensure event loop exists
+            get_or_create_eventloop()
+            
             parser = LlamaParse(
                 api_key=LLAMAPARSE_API_KEY,
                 result_type="markdown",
@@ -58,6 +74,9 @@ def load_documents():
         # Try LlamaParse first if available
         if parser and filename.endswith((".pdf", ".docx", ".doc", ".pptx", ".txt")):
             try:
+                # Ensure event loop is available before parsing
+                loop = get_or_create_eventloop()
+                
                 print(f"📄 Processing {filename} with LlamaParse...")
                 parsed_docs = parser.load_data(file_path)
                 
@@ -150,33 +169,52 @@ def get_vectorstore():
     # Check if vector store exists
     if os.path.exists(PERSIST_DIR):
         print(f"📦 Loading existing vector store from {PERSIST_DIR}...")
-        vectorstore = Chroma(
-            persist_directory=PERSIST_DIR,
-            embedding_function=embeddings
-        )
-        print("✅ Vector store loaded successfully")
-        return vectorstore
-    else:
-        print(f"⚠️ Vector store not found at {PERSIST_DIR}")
-        print("🔨 Creating new vector store...")
-        
-        # Load documents
-        docs = load_documents()
-        if not docs:
-            print("❌ No documents found in data directory!")
-            return None
-        
-        # Create chunks
-        chunks = create_chunks(docs)
-        
-        # Create vector store
+        try:
+            vectorstore = Chroma(
+                persist_directory=PERSIST_DIR,
+                embedding_function=embeddings,
+                collection_metadata={"hnsw:space": "cosine"}
+            )
+            print("✅ Vector store loaded successfully")
+            return vectorstore
+        except Exception as e:
+            print(f"⚠️ Error loading vector store: {e}")
+            print("🗑️ Attempting to rebuild vector store...")
+            
+            # Delete corrupted vector store
+            try:
+                shutil.rmtree(PERSIST_DIR)
+                print(f"✅ Deleted corrupted vector store at {PERSIST_DIR}")
+            except Exception as delete_error:
+                print(f"❌ Could not delete vector store: {delete_error}")
+                return None
+    
+    # Create new vector store
+    print(f"⚠️ Vector store not found at {PERSIST_DIR}")
+    print("🔨 Creating new vector store...")
+    
+    # Load documents
+    docs = load_documents()
+    if not docs:
+        print("❌ No documents found in data directory!")
+        return None
+    
+    # Create chunks
+    chunks = create_chunks(docs)
+    
+    # Create vector store with proper settings
+    try:
         vectorstore = Chroma.from_documents(
             documents=chunks,
             embedding=embeddings,
-            persist_directory=PERSIST_DIR
+            persist_directory=PERSIST_DIR,
+            collection_metadata={"hnsw:space": "cosine"}
         )
         print(f"✅ Vector store created and saved to {PERSIST_DIR}")
         return vectorstore
+    except Exception as e:
+        print(f"❌ Error creating vector store: {e}")
+        return None
 
 # -------------------------------
 # STEP 4: Define the RAG chain
@@ -230,12 +268,27 @@ def rebuild_vector_store():
     """Delete existing vector store and trigger rebuild"""
     try:
         if os.path.exists(PERSIST_DIR):
+            # Force close any open connections
+            import gc
+            gc.collect()
+            
+            # Add small delay to ensure connections are closed
+            time.sleep(0.5)
+            
+            # Delete the directory
             shutil.rmtree(PERSIST_DIR)
             print(f"🗑️ Deleted {PERSIST_DIR}")
+            
+            # Another small delay after deletion
+            time.sleep(0.5)
             return True
         else:
             print(f"⚠️ {PERSIST_DIR} does not exist")
             return False
+    except PermissionError as e:
+        print(f"❌ Permission error: {e}")
+        print("💡 Try closing the app and manually deleting the folder")
+        return False
     except Exception as e:
         print(f"❌ Error deleting vector store: {e}")
         return False
@@ -247,18 +300,17 @@ def main():
     st.set_page_config(
         page_title="Marathon Assistant",
         page_icon="🏃‍♂️",
-        layout="wide",
-        initial_sidebar_state="expanded"
-        )
+        layout="wide"
+    )
     
     st.title("🏃‍♂️ Freshworks Chennai Marathon Assistant")
     st.markdown("Ask me anything about the marathon — registration, race day, or partners!")
     
-    # # Show parsing method being used
-    # if USE_LLAMAPARSE:
-    #     st.success("✅ Enhanced parsing with LlamaParse enabled")
-    # else:
-    #     st.info("📝 Using standard text loading")
+    # Show parsing method being used
+    if USE_LLAMAPARSE:
+        st.success("✅ Enhanced parsing with LlamaParse enabled")
+    else:
+        st.info("📝 Using standard text loading")
     
     # Initialize vector store
     if 'vectorstore' not in st.session_state:
