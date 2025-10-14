@@ -1,5 +1,6 @@
 import os
 import time
+import shutil
 import streamlit as st
 from langchain.schema import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -223,23 +224,41 @@ Answer:"""
     return qa_chain
 
 # -------------------------------
+# UTILITY: Rebuild Vector Store
+# -------------------------------
+def rebuild_vector_store():
+    """Delete existing vector store and trigger rebuild"""
+    try:
+        if os.path.exists(PERSIST_DIR):
+            shutil.rmtree(PERSIST_DIR)
+            print(f"🗑️ Deleted {PERSIST_DIR}")
+            return True
+        else:
+            print(f"⚠️ {PERSIST_DIR} does not exist")
+            return False
+    except Exception as e:
+        print(f"❌ Error deleting vector store: {e}")
+        return False
+
+# -------------------------------
 # STEP 5: Streamlit Chat UI
 # -------------------------------
 def main():
     st.set_page_config(
         page_title="Marathon Assistant",
         page_icon="🏃‍♂️",
-        layout="wide"
-    )
+        layout="wide",
+        initial_sidebar_state="expanded"
+        )
     
     st.title("🏃‍♂️ Freshworks Chennai Marathon Assistant")
     st.markdown("Ask me anything about the marathon — registration, race day, or partners!")
     
-    # Show parsing method being used
-    if USE_LLAMAPARSE:
-        st.success("✅ Enhanced parsing with LlamaParse enabled")
-    else:
-        st.info("📝 Using standard text loading")
+    # # Show parsing method being used
+    # if USE_LLAMAPARSE:
+    #     st.success("✅ Enhanced parsing with LlamaParse enabled")
+    # else:
+    #     st.info("📝 Using standard text loading")
     
     # Initialize vector store
     if 'vectorstore' not in st.session_state:
@@ -272,8 +291,28 @@ def main():
         - Ask about registration, timing, routes
         """)
         
-        if st.button("🔄 Rebuild Vector Store"):
-            st.info("To rebuild, delete the 'marathon_kb_enhanced' folder and restart the app.")
+        st.markdown("---")
+        st.markdown("### 🔧 Maintenance")
+        
+        if st.button("🔄 Rebuild Vector Store", type="primary"):
+            with st.spinner("Rebuilding vector store..."):
+                # Clear session state
+                if 'vectorstore' in st.session_state:
+                    del st.session_state.vectorstore
+                if 'qa_chain' in st.session_state:
+                    del st.session_state.qa_chain
+                
+                # Delete vector store folder
+                success = rebuild_vector_store()
+                
+                if success:
+                    st.success("✅ Vector store deleted! Reloading app...")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.warning("⚠️ Vector store folder not found. Creating new one...")
+                    time.sleep(1)
+                    st.rerun()
     
     # Chat interface
     query = st.text_input("💬 Your question:", placeholder="e.g., What time does the race start?")
