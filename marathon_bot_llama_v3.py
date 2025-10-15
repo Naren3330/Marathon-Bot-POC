@@ -431,8 +431,8 @@ def main():
     
     # Advanced options
     with st.expander("⚙️ Advanced Options"):
-        show_sources = st.checkbox("Show source documents", value=False)
-        show_metrics = st.checkbox("Show performance metrics", value=True)
+        # show_sources = st.checkbox("Show source documents", value=False)
+        # show_metrics = st.checkbox("Show performance metrics", value=False)
         use_query_enhancement = st.checkbox("Use query enhancement", value=True)
     
     if query:
@@ -441,7 +441,6 @@ def main():
 
             with get_openai_callback() as cb:
                 if use_query_enhancement:
-                    st.info("🔍 Using HyDE for retrieval...")
                     
                     # 1. Generate hypothetical doc for retrieval
                     hyde_query = enhance_query(query)
