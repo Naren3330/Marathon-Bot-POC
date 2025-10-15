@@ -468,23 +468,23 @@ def main():
         st.write("### 💬 Answer")
         st.success(result["result"])
         
-        # Show sources
-        if show_sources and result["source_documents"]:
-            st.write("### 📚 Retrieved Context")
-            for i, doc in enumerate(result["source_documents"]):
-                with st.expander(f"📄 Chunk {i+1} from {doc.metadata['source']}"):
-                    st.text(doc.page_content)
-                    st.caption(f"Parser: {doc.metadata.get('parser', 'unknown')} | "
-                             f"Length: {doc.metadata.get('chunk_length', 'N/A')} chars | "
-                             f"Chunk Index: {doc.metadata.get('chunk_index', 'N/A')}")
+        # # Show sources
+        # if show_sources and result["source_documents"]:
+        #     st.write("### 📚 Retrieved Context")
+        #     for i, doc in enumerate(result["source_documents"]):
+        #         with st.expander(f"📄 Chunk {i+1} from {doc.metadata['source']}"):
+        #             st.text(doc.page_content)
+        #             st.caption(f"Parser: {doc.metadata.get('parser', 'unknown')} | "
+        #                      f"Length: {doc.metadata.get('chunk_length', 'N/A')} chars | "
+        #                      f"Chunk Index: {doc.metadata.get('chunk_index', 'N/A')}")
         
-        # Show metrics
-        if show_metrics:
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("⏱️ Time", f"{query_time}s")
-            col2.metric("🎯 Tokens", cb.total_tokens)
-            col3.metric("💰 Cost", f"${cb.total_cost:.4f}")
-            col4.metric("📄 Chunks", len(result["source_documents"]))
+        # # Show metrics
+        # if show_metrics:
+        #     col1, col2, col3, col4 = st.columns(4)
+        #     col1.metric("⏱️ Time", f"{query_time}s")
+        #     col2.metric("🎯 Tokens", cb.total_tokens)
+        #     col3.metric("💰 Cost", f"${cb.total_cost:.4f}")
+        #     col4.metric("📄 Chunks", len(result["source_documents"]))
         
         # Console logging
         print("\n" + "="*60)
