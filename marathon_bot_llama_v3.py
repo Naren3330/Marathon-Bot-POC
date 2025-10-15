@@ -145,8 +145,8 @@ def create_chunks(docs):
     """Split documents into optimized chunks"""
     # FIXED: Smaller chunks for better semantic matching
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,  # Smaller chunks = more precise retrieval
-        chunk_overlap=100,  # More overlap for context continuity
+        chunk_size=1000,  # Smaller chunks = more precise retrieval
+        chunk_overlap=150,  # More overlap for context continuity
         separators=["\n\n", "\n", ". ", "! ", "? ", "; ", ", ", " ", ""],
         length_function=len,
     )
@@ -275,7 +275,7 @@ def get_vectorstore():
             documents=chunks,
             embedding=embeddings,
             persist_directory=PERSIST_DIR,
-            collection_metadata={"hnsw:space": "l2"}
+            collection_metadata={"hnsw:space": "cosine"}
         )
         print(f"✅ Vector store created and saved to {PERSIST_DIR}")
         return vectorstore
@@ -286,12 +286,11 @@ def get_vectorstore():
 # -------------------------------
 # STEP 4: Define the RAG chain (IMPROVED)
 # -------------------------------
-@st.cache_resource
-def create_qa_chain(_vectorstore):
+def create_qa_chain(vectorstore):
     """Create the RAG QA chain with enhanced retrieval"""
     
     # FIXED: Retrieve more chunks + use MMR for diversity
-    retriever = _vectorstore.as_retriever(
+    retriever = vectorstore.as_retriever(
         search_type="mmr",  # Maximum Marginal Relevance for diverse results
         search_kwargs={
             "k": 8,  # Get more chunks
@@ -394,7 +393,7 @@ def main():
         st.header("📊 System Info")
         
         try:
-            collection = st.session_state.vectorstore._collection
+            collection = vectorstore._collection
             doc_count = collection.count()
             st.metric("Documents in DB", doc_count)
         except:
@@ -403,9 +402,11 @@ def main():
         st.markdown("---")
         st.markdown("### 💡 Tips")
         st.markdown("""
-        - Ask natural questions: "When does the 5K start?"
-        - Be specific: "What's included in registration?"
+        - Ask natural questions: "What is the age limit for each event ?"
         - Try variations if first answer isn't perfect
+        - Knowledge base taken from website:
+           + Terms & Conditions
+           + FAQ's
         """)
         
         st.markdown("---")
@@ -427,7 +428,7 @@ def main():
                     st.error("⚠️ Could not delete vector store. See console for details.")
     
     # Chat interface
-    query = st.text_input("💬 Your question:", placeholder="e.g., What time does the 5K race start?")
+    query = st.text_input("💬 Your question:", placeholder="e.g., What is the age limit for each event ?")
     
     # Advanced options
     with st.expander("⚙️ Advanced Options"):
@@ -435,7 +436,7 @@ def main():
         # show_metrics = st.checkbox("Show performance metrics", value=False)
         use_query_enhancement = st.checkbox("Use query enhancement", value=True)
     
-    if query:
+    if query and query.strip():
         with st.spinner("🤔 Thinking..."):
             start_time = time.time()
 
